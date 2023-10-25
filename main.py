@@ -30,31 +30,47 @@ b_uuid: str = '2af553d1-3f9f-4b19-ac6c-82ced3255cd0'
 m_uuid: str = 'ea936dd5-eafa-4f70-9b7a-6a794a4de3a9'
 
 async def main():
-    devices = await BleakScanner.discover()
-    for d in devices:
-        print(d)
-        print(d.name)
-        print(d.address)
-        if d.name == 'W55':
-            print('Found it!')
-            address = d.address
-            async with BleakClient(address) as client:
+    while True:
+        devices = await BleakScanner.discover()
+        for d in devices:
+            print(d)
+            print(d.name)
+            print(d.address)
+            if d.name == 'W55':
+                print('Found it!')
+                address = d.address
 
-                if (not client.is_connected):
-                    raise "client not connected"
+                try:
+                    print("Connect")
+                    async with BleakClient(address) as client:
 
-                services = await client.get_services()
+                        if (not client.is_connected):
+                            raise "client not connected"
 
-                for service in services:
-                    print('service', service.handle, service.uuid, service.description)
+#                        services = await client.get_services()
 
-                await client.start_notify(t_uuid, t_callback)
-                await client.start_notify(p_uuid, p_callback)
-                await client.start_notify(h_uuid, h_callback)
-                await client.start_notify(b_uuid, b_callback)
-                await client.start_notify(m_uuid, m_callback)
-                await asyncio.sleep(6000)
-                await client.stop_notify(t_uuid)
-            return
+#                        for service in services:
+#                            print('service', service.handle, service.uuid, service.description)
+
+                        print("Start notification")
+                        await client.start_notify(t_uuid, t_callback)
+                        await client.start_notify(p_uuid, p_callback)
+                        await client.start_notify(h_uuid, h_callback)
+                        await client.start_notify(b_uuid, b_callback)
+                        await client.start_notify(m_uuid, m_callback)
+                        print("Wait for notification")
+                        await asyncio.sleep(20)
+                        print("Stop notification") 
+                        await client.stop_notify(t_uuid)
+                        await client.stop_notify(p_uuid)
+                        await client.stop_notify(h_uuid)
+                        await client.stop_notify(b_uuid)
+                        await client.stop_notify(m_uuid)
+                        print("Disconnect")
+                        await client.disconnect()
+                        await asyncio.sleep(1)
+                except:
+                    await asyncio.sleep(1)
+                    pass
 
 asyncio.run(main())
