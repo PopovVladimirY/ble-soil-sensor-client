@@ -59,7 +59,7 @@ async def main():
                         printData(data)
 #                        await client.start_notify(t_uuid, t_callback)
 #                        print("Wait for notification")
-                        await asyncio.sleep(15)
+                        await asyncio.sleep(15) # not too often
             #                        print("Stop notification") 
             #                        await client.stop_notify(t_uuid)
                         print("Disconnect")
