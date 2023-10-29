@@ -20,6 +20,7 @@ def t_callback(sender: BleakGATTCharacteristic, data: bytearray):
     printData(data)
 
 t_uuid: str = '9b5099ae-10f0-4a78-a8b7-eb086e3cb69b'
+sleep_uuid: str = '54021135-c289-4e63-af8e-653f32e7851a'
 
 async def main():
     while True:
@@ -58,6 +59,13 @@ async def main():
                         await asyncio.sleep(1)
                         data = await client.read_gatt_char(t_uuid)
                         printData(data)
+
+                        sleepInterval = 5*60;
+                        read = await client.read_gatt_char(sleep_uuid)
+                        nInterval: int = np.frombuffer(read, count=1, dtype=np.int32)[0]
+                        print(f"Old Sleep Interval: {nInterval}")
+                        print(f"New Sleep Interval: {sleepInterval}")
+                        await client.write_gatt_char(sleep_uuid, sleepInterval.to_bytes(4, "little"))
 #                        await client.start_notify(t_uuid, t_callback)
 #                        print("Wait for notification")
                         await asyncio.sleep(15) # not too often
