@@ -1,7 +1,7 @@
 # BLE Client for Wireless Soil Sensor
 
 This BLE client is a part of a bigger project including wireless sensors.
-It is sanning continuously for sensors ready to provide data, reading it and printitn into console.
+It is sanning continuously for sensors ready to provide data, reading it and printitng into console.
 
 ## TODO
 
