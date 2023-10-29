@@ -2,13 +2,14 @@ import asyncio
 import sys
 import numpy as np
 import datetime 
-#import bleak
 from bleak import BleakScanner, BleakClient, BleakGATTCharacteristic
 
 def printData(data):
     if data != None and len(data):
-        fNotify: float = np.frombuffer(data, dtype=np.float32)
+        nCnt: int = np.frombuffer(data, count=1, dtype=np.int32)[0]
+        fNotify: float = np.frombuffer(data, offset=4, dtype=np.float32)
         print(f"  Date/Time: {datetime.datetime.now()}")
+        print(f" Boot Count: {nCnt}")
         print(f"Temperature: {fNotify[0]:.1f} °C")
         print(f"   Pressure: {fNotify[1]:.0f} Pa")
         print(f"   Humidity: {fNotify[2]:.1f} %")
