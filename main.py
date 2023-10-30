@@ -1,8 +1,78 @@
 import asyncio
-import sys
 import numpy as np
 import datetime 
 from bleak import BleakScanner, BleakClient, BleakGATTCharacteristic
+from kafka import KafkaProducer, KafkaAdminClient
+from kafka.admin import NewTopic
+import io
+import avro.schema
+from avro.io import DatumWriter
+
+
+t_uuid: str = '9b5099ae-10f0-4a78-a8b7-eb086e3cb69b'
+sleep_uuid: str = '54021135-c289-4e63-af8e-653f32e7851a'
+
+broker='192.168.200.12:9092'
+client_id = 'msensor1_id'
+msensor1_topic = "msensor1_live_topic"
+
+avro_schema = '''{
+    "namespace": "msensor.avro",
+    "type": "record",
+    "name": "msensor",
+    "fields": [
+        {"name": "timestamp", "type": ["float", "null"]},
+        {"name": "wakeup_count", "type": ["int", "null"]},
+        {"name": "temperature",  "type": ["float", "null"]},
+        {"name": "pressure", "type": ["float", "null"]},
+        {"name": "humidity", "type": ["float", "null"]},
+        {"name": "battery", "type": ["float", "null"]},
+        {"name": "soil", "type": ["float", "null"]}
+    ]
+}'''
+
+schema = avro.schema.parse(avro_schema)
+
+admin = KafkaAdminClient(bootstrap_servers = broker, client_id = client_id)
+producer = KafkaProducer(bootstrap_servers = broker, client_id = client_id)
+
+topics = admin.list_topics()
+#print(topics)
+
+if not msensor1_topic in topics:
+    topic_list = []
+    topic_list.append(NewTopic(name = msensor1_topic, num_partitions = 1, replication_factor = 1))
+    admin.create_topics(new_topics = topic_list, validate_only = False)
+
+'''
+Sending data to Kafka server in Avro format
+'''
+
+def sendData(producer, topic, data, schema):
+    if data != None and len(data):
+        bytes_writer = io.BytesIO()
+        encoder = avro.io.BinaryEncoder(bytes_writer)
+        nCnt = np.frombuffer(data, count=1, dtype=np.int32)[0]
+        fNotify = np.frombuffer(data, offset=4, dtype=np.float32)
+
+        d = datetime.datetime.now()
+        ts = d.timestamp()
+        x = {
+            "timestamp": ts, 
+            "wakeup_count": int(nCnt), 
+            "temperature": float(fNotify[0]), 
+            "pressure": float(fNotify[1]), 
+            "humidity": float(fNotify[2]), 
+            "battery": float(fNotify[3]), 
+            "soil": float(fNotify[4])
+            }
+        writer = DatumWriter(schema)
+        try:
+            writer.write(datum=x, encoder=encoder)
+            raw_bytes = bytes_writer.getvalue()
+            producer.send(topic = topic, value = raw_bytes)
+        except Exception as e: # work on python 3.x
+            print('Failed: %s' % e)
 
 def printData(data):
     if data != None and len(data):
@@ -19,10 +89,7 @@ def printData(data):
 def t_callback(sender: BleakGATTCharacteristic, data: bytearray):
     printData(data)
 
-t_uuid: str = '9b5099ae-10f0-4a78-a8b7-eb086e3cb69b'
-sleep_uuid: str = '54021135-c289-4e63-af8e-653f32e7851a'
-
-async def main():
+async def main(producer, topic, schema):
     while True:
         address = ['A0:B7:65:59:6F:BA']
         '''                
@@ -58,9 +125,9 @@ async def main():
 
                         await asyncio.sleep(1)
                         data = await client.read_gatt_char(t_uuid)
-                        printData(data)
+                        printData(data=data)
 
-                        sleepInterval = 5*60;
+                        sleepInterval = 10*60;
                         read = await client.read_gatt_char(sleep_uuid)
                         nInterval: int = np.frombuffer(read, count=1, dtype=np.int32)[0]
                         print(f"Old Sleep Interval: {nInterval}")
@@ -68,14 +135,19 @@ async def main():
                         await client.write_gatt_char(sleep_uuid, sleepInterval.to_bytes(4, "little"))
 #                        await client.start_notify(t_uuid, t_callback)
 #                        print("Wait for notification")
+                        sendData(producer=producer, topic=topic, data=data, schema=schema)
+
                         await asyncio.sleep(15) # not too often
             #                        print("Stop notification") 
             #                        await client.stop_notify(t_uuid)
                         print("Disconnect")
                         await client.disconnect()
                 except:
-                    pass
+                    pass # Waiting for sensor to wakeup and go online. Not a error.
+
+#                except Exception as e: # work on python 3.x
+#                    print('Failed: %s' % e)
 
         await asyncio.sleep(1)
 
-asyncio.run(main())
+asyncio.run(main(producer=producer, topic=msensor1_topic, schema=schema))
