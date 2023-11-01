@@ -1,7 +1,7 @@
 import asyncio
 import numpy as np
 import datetime 
-from bleak import BleakScanner, BleakClient, BleakGATTCharacteristic
+from bleak import BleakScanner, BleakClient, BleakGATTCharacteristic, BleakGATTServiceCollection
 from kafka import KafkaProducer, KafkaAdminClient
 from kafka.admin import NewTopic
 import io
@@ -94,8 +94,8 @@ def t_callback(sender: BleakGATTCharacteristic, data: bytearray):
 
 async def main(producer, topic, schema):
     while True:
-        address = [] #'A0:B7:65:59:6F:BA']
-                        
+        address = ['A0:B7:65:59:6F:BA']
+        '''
         devices = []
         try:
             # Scan is required to ensure stable reconnecion to device, as per Bleak manual
@@ -113,7 +113,7 @@ async def main(producer, topic, schema):
                 if d.name == 'W55':
                     print('Found W55!')
                     address.append(d.address) #'A0:B7:65:59:6F:BA'
-                            
+        '''
         
         if len(address):
             for a in address:
@@ -126,17 +126,20 @@ async def main(producer, topic, schema):
                             if (not client.is_connected):
                                 print("Connection failed")
                                 raise "client not connected"
-
-                            await asyncio.sleep(2)
+                            '''
+                            services = await client.get_services()
+                            for s in services:
+                                print(s)
+                                for c in s.characteristics:
+                                    print(c)
+                            '''
+                            await asyncio.sleep(1)
                             data = await client.read_gatt_char(t_uuid)
-                            print("Data received")
 
                             sleepInterval = 30*60;
                             read = await client.read_gatt_char(sleep_uuid)
-                            print("Sleep interval received")
                             nInterval: int = np.frombuffer(read, count=1, dtype=np.int32)[0]
                             await client.write_gatt_char(sleep_uuid, sleepInterval.to_bytes(4, "little"))
-                            print("Sleep interval updated")
     #                        await client.start_notify(t_uuid, t_callback)
     #                        print("Wait for notification")
                             await sendData(producer=producer, topic=topic, data=data, schema=schema)
