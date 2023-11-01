@@ -14,13 +14,14 @@ sleep_uuid: str = '54021135-c289-4e63-af8e-653f32e7851a'
 
 broker='192.168.200.12:9092'
 client_id = 'msensor1_id'
-msensor1_topic = "msensor1_live_topic"
+msensor1_topic = "msensor2_live_topic"
 
 avro_schema = '''{
     "namespace": "msensor.avro",
     "type": "record",
     "name": "msensor",
     "fields": [
+        {"name": "device", "type": ["string", "null"]},
         {"name": "timestamp", "type": ["float", "null"]},
         {"name": "wakeup_count", "type": ["int", "null"]},
         {"name": "temperature",  "type": ["float", "null"]},
@@ -48,7 +49,7 @@ if not msensor1_topic in topics:
 Sending data to Kafka server in Avro format
 '''
 
-async def sendData(producer, topic, data, schema):
+async def sendData(producer, topic, data, schema, device):
     if data != None and len(data):
         try:
             bytes_writer = io.BytesIO()
@@ -59,6 +60,7 @@ async def sendData(producer, topic, data, schema):
             d = datetime.datetime.now()
             ts = d.timestamp()
             x = {
+                "device": device,
                 "timestamp": ts, 
                 "wakeup_count": int(nCnt), 
                 "temperature": float(fNotify[0]), 
@@ -74,11 +76,12 @@ async def sendData(producer, topic, data, schema):
         except Exception as e: # work on python 3.x
             print('Failed: %s' % e)
 
-async def printData(data):
+async def printData(data, device):
     if data != None and len(data):
         try:
             nCnt: int = np.frombuffer(data, count=1, dtype=np.int32)[0]
             fNotify: float = np.frombuffer(data, offset=4, dtype=np.float32)
+            print(f"     Device: {device}")
             print(f"  Date/Time: {datetime.datetime.now()}")
             print(f" Boot Count: {nCnt}")
             print(f"Temperature: {fNotify[0]:.1f} °C")
@@ -94,7 +97,8 @@ def t_callback(sender: BleakGATTCharacteristic, data: bytearray):
 
 async def main(producer, topic, schema):
     while True:
-        address = ['A0:B7:65:59:6F:BA']
+        address = ['A0:B7:65:59:6F:BA', 'A0:B7:65:67:FE:26']
+        map = {'A0:B7:65:59:6F:BA': 'Red', 'A0:B7:65:67:FE:26': 'Blue'}
         '''
         devices = []
         try:
@@ -118,7 +122,7 @@ async def main(producer, topic, schema):
         if len(address):
             for a in address:
                 try:
-                    ble = BleakClient(a)
+                    ble = BleakClient(a, timeout=2)
                     async with ble as client:
                         try:
                             print("Connected")
@@ -142,16 +146,17 @@ async def main(producer, topic, schema):
                             await client.write_gatt_char(sleep_uuid, sleepInterval.to_bytes(4, "little"))
     #                        await client.start_notify(t_uuid, t_callback)
     #                        print("Wait for notification")
-                            await sendData(producer=producer, topic=topic, data=data, schema=schema)
-                            await printData(data=data)
+                            await sendData(producer=producer, topic=topic, data=data, schema=schema, device=map[a] if map[a] != None else 'Unknown')
+                            await printData(data=data, device=map[a] if map[a] != None else 'Unknown')
                             print(f"Old Sleep Interval: {nInterval}")
                             print(f"New Sleep Interval: {sleepInterval}")
 
-                            await asyncio.sleep(15) # not too often
                 #                        print("Stop notification") 
                 #                        await client.stop_notify(t_uuid)
                             print("Disconnect")
                             await client.disconnect()
+                            await asyncio.sleep(10) # not too often
+
                         except Exception as e: # work on python 3.x
                             print('Failed: %s' % e)
 
