@@ -160,4 +160,6 @@ async def main(producer, topic, schema):
 
         await asyncio.sleep(1)
 
-asyncio.run(main(producer=producer, topic=msensor1_topic, schema=schema))
+#asyncio.run()
+loop = asyncio.get_event_loop()
+loop.run_until_complete(main(producer=producer, topic=msensor1_topic, schema=schema))
