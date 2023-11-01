@@ -50,24 +50,24 @@ Sending data to Kafka server in Avro format
 
 async def sendData(producer, topic, data, schema):
     if data != None and len(data):
-        bytes_writer = io.BytesIO()
-        encoder = avro.io.BinaryEncoder(bytes_writer)
-        nCnt = np.frombuffer(data, count=1, dtype=np.int32)[0]
-        fNotify = np.frombuffer(data, offset=4, dtype=np.float32)
-
-        d = datetime.datetime.now()
-        ts = d.timestamp()
-        x = {
-            "timestamp": ts, 
-            "wakeup_count": int(nCnt), 
-            "temperature": float(fNotify[0]), 
-            "pressure": float(fNotify[1]), 
-            "humidity": float(fNotify[2]), 
-            "battery": float(fNotify[3]), 
-            "soil": float(fNotify[4])
-            }
-        writer = DatumWriter(schema)
         try:
+            bytes_writer = io.BytesIO()
+            encoder = avro.io.BinaryEncoder(bytes_writer)
+            nCnt = np.frombuffer(data, count=1, dtype=np.int32)[0]
+            fNotify = np.frombuffer(data, offset=4, dtype=np.float32)
+
+            d = datetime.datetime.now()
+            ts = d.timestamp()
+            x = {
+                "timestamp": ts, 
+                "wakeup_count": int(nCnt), 
+                "temperature": float(fNotify[0]), 
+                "pressure": float(fNotify[1]), 
+                "humidity": float(fNotify[2]), 
+                "battery": float(fNotify[3]), 
+                "soil": float(fNotify[4])
+                }
+            writer = DatumWriter(schema)
             writer.write(datum=x, encoder=encoder)
             raw_bytes = bytes_writer.getvalue()
             producer.send(topic = topic, value = raw_bytes)
@@ -76,15 +76,18 @@ async def sendData(producer, topic, data, schema):
 
 async def printData(data):
     if data != None and len(data):
-        nCnt: int = np.frombuffer(data, count=1, dtype=np.int32)[0]
-        fNotify: float = np.frombuffer(data, offset=4, dtype=np.float32)
-        print(f"  Date/Time: {datetime.datetime.now()}")
-        print(f" Boot Count: {nCnt}")
-        print(f"Temperature: {fNotify[0]:.1f} °C")
-        print(f"   Pressure: {fNotify[1]:.0f} Pa")
-        print(f"   Humidity: {fNotify[2]:.1f} %")
-        print(f"    Battery: {fNotify[3]:.2f} V")
-        print(f"       Soil: {fNotify[4]:.1f} %")
+        try:
+            nCnt: int = np.frombuffer(data, count=1, dtype=np.int32)[0]
+            fNotify: float = np.frombuffer(data, offset=4, dtype=np.float32)
+            print(f"  Date/Time: {datetime.datetime.now()}")
+            print(f" Boot Count: {nCnt}")
+            print(f"Temperature: {fNotify[0]:.1f} °C")
+            print(f"   Pressure: {fNotify[1]:.0f} Pa")
+            print(f"   Humidity: {fNotify[2]:.1f} %")
+            print(f"    Battery: {fNotify[3]:.2f} V")
+            print(f"       Soil: {fNotify[4]:.1f} %")
+        except Exception as e: # work on python 3.x
+            print('Failed: %s' % e)
 
 def t_callback(sender: BleakGATTCharacteristic, data: bytearray):
     printData(data)
@@ -117,31 +120,38 @@ async def main(producer, topic, schema):
                 try:
                     ble = BleakClient(a)
                     async with ble as client:
-                        print("Connected")
+                        try:
+                            print("Connected")
 
-                        if (not client.is_connected):
-                            print("Connection failed")
-                            raise "client not connected"
+                            if (not client.is_connected):
+                                print("Connection failed")
+                                raise "client not connected"
 
-                        await asyncio.sleep(1)
-                        data = await client.read_gatt_char(t_uuid)
+                            await asyncio.sleep(1)
+                            data = await client.read_gatt_char(t_uuid)
+                            print("Data received")
 
-                        sleepInterval = 30*60;
-                        read = await client.read_gatt_char(sleep_uuid)
-                        nInterval: int = np.frombuffer(read, count=1, dtype=np.int32)[0]
-                        await client.write_gatt_char(sleep_uuid, sleepInterval.to_bytes(4, "little"))
-#                        await client.start_notify(t_uuid, t_callback)
-#                        print("Wait for notification")
-                        await sendData(producer=producer, topic=topic, data=data, schema=schema)
-                        await printData(data=data)
-                        print(f"Old Sleep Interval: {nInterval}")
-                        print(f"New Sleep Interval: {sleepInterval}")
+                            sleepInterval = 30*60;
+                            read = await client.read_gatt_char(sleep_uuid)
+                            print("Sleep interval received")
+                            nInterval: int = np.frombuffer(read, count=1, dtype=np.int32)[0]
+                            await client.write_gatt_char(sleep_uuid, sleepInterval.to_bytes(4, "little"))
+                            print("Sleep interval updated")
+    #                        await client.start_notify(t_uuid, t_callback)
+    #                        print("Wait for notification")
+                            await sendData(producer=producer, topic=topic, data=data, schema=schema)
+                            await printData(data=data)
+                            print(f"Old Sleep Interval: {nInterval}")
+                            print(f"New Sleep Interval: {sleepInterval}")
 
-                        await asyncio.sleep(15) # not too often
-            #                        print("Stop notification") 
-            #                        await client.stop_notify(t_uuid)
-                        print("Disconnect")
-                        await client.disconnect()
+                            await asyncio.sleep(15) # not too often
+                #                        print("Stop notification") 
+                #                        await client.stop_notify(t_uuid)
+                            print("Disconnect")
+                            await client.disconnect()
+                        except Exception as e: # work on python 3.x
+                            print('Failed: %s' % e)
+
                 except:
                     pass # Waiting for sensor to wakeup and go online. Not a error.
 
