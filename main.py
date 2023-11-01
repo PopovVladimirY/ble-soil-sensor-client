@@ -48,7 +48,7 @@ if not msensor1_topic in topics:
 Sending data to Kafka server in Avro format
 '''
 
-def sendData(producer, topic, data, schema):
+async def sendData(producer, topic, data, schema):
     if data != None and len(data):
         bytes_writer = io.BytesIO()
         encoder = avro.io.BinaryEncoder(bytes_writer)
@@ -74,7 +74,7 @@ def sendData(producer, topic, data, schema):
         except Exception as e: # work on python 3.x
             print('Failed: %s' % e)
 
-def printData(data):
+async def printData(data):
     if data != None and len(data):
         nCnt: int = np.frombuffer(data, count=1, dtype=np.int32)[0]
         fNotify: float = np.frombuffer(data, offset=4, dtype=np.float32)
@@ -125,17 +125,17 @@ async def main(producer, topic, schema):
 
                         await asyncio.sleep(1)
                         data = await client.read_gatt_char(t_uuid)
-                        printData(data=data)
 
-                        sleepInterval = 10*60;
+                        sleepInterval = 30*60;
                         read = await client.read_gatt_char(sleep_uuid)
                         nInterval: int = np.frombuffer(read, count=1, dtype=np.int32)[0]
-                        print(f"Old Sleep Interval: {nInterval}")
-                        print(f"New Sleep Interval: {sleepInterval}")
                         await client.write_gatt_char(sleep_uuid, sleepInterval.to_bytes(4, "little"))
 #                        await client.start_notify(t_uuid, t_callback)
 #                        print("Wait for notification")
-                        sendData(producer=producer, topic=topic, data=data, schema=schema)
+                        await sendData(producer=producer, topic=topic, data=data, schema=schema)
+                        await printData(data=data)
+                        print(f"Old Sleep Interval: {nInterval}")
+                        print(f"New Sleep Interval: {sleepInterval}")
 
                         await asyncio.sleep(15) # not too often
             #                        print("Stop notification") 
