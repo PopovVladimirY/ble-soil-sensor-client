@@ -127,7 +127,7 @@ async def main(producer, topic, schema):
                                 print("Connection failed")
                                 raise "client not connected"
 
-                            await asyncio.sleep(1)
+                            await asyncio.sleep(2)
                             data = await client.read_gatt_char(t_uuid)
                             print("Data received")
 
