@@ -97,7 +97,8 @@ def t_callback(sender: BleakGATTCharacteristic, data: bytearray):
 
 async def main(producer, topic, schema):
     while True:
-        address = ['A0:B7:65:59:6F:BA', 'A0:B7:65:67:FE:26']
+#        address = ['A0:B7:65:59:6F:BA', 'A0:B7:65:67:FE:26']
+        address = ['A0:B7:65:59:6F:BA']
         map = {'A0:B7:65:59:6F:BA': 'Red', 'A0:B7:65:67:FE:26': 'Blue'}
         '''
         devices = []
