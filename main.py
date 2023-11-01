@@ -94,8 +94,8 @@ def t_callback(sender: BleakGATTCharacteristic, data: bytearray):
 
 async def main(producer, topic, schema):
     while True:
-        address = ['A0:B7:65:59:6F:BA']
-        '''                
+        address = [] #'A0:B7:65:59:6F:BA']
+                        
         devices = []
         try:
             # Scan is required to ensure stable reconnecion to device, as per Bleak manual
@@ -112,9 +112,9 @@ async def main(producer, topic, schema):
     #            print(d.address)
                 if d.name == 'W55':
                     print('Found W55!')
-#                    address.append(d.address) #'A0:B7:65:59:6F:BA'
+                    address.append(d.address) #'A0:B7:65:59:6F:BA'
                             
-        '''
+        
         if len(address):
             for a in address:
                 try:
