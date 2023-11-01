@@ -10,6 +10,8 @@ It is sanning continuously for sensors ready to provide data, reading it and pri
 
 ## Handling OS Caching of BLE Device Services
 
+    https://bleak.readthedocs.io/en/latest/troubleshooting.html#common-mistakes
+
 If you develop your own BLE peripherals, and frequently change services, characteristics and/or descriptors, then Bleak might report outdated versions of your peripheral’s services due to OS level caching. The caching is done to speed up the connections with peripherals where services do not change and is enabled by default on most operating systems and thus also in Bleak.
 
 There are ways to avoid this on different backends though, and if you experience these kinds of problems, the steps below might help you to circumvent the caches.
