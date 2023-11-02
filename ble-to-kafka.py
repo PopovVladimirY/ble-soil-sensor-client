@@ -128,7 +128,7 @@ async def main(admin, producer, topic, schema):
         devices = []
         try:
             # Scan is required to ensure stable reconnecion to device, as per Bleak manual
-            print("Scan for BLE devices")
+#            print("Scan for BLE devices")
             devices = await BleakScanner.discover(timeout=3)
         except:
             print("BLE scanner failed")
@@ -136,11 +136,11 @@ async def main(admin, producer, topic, schema):
 
         if (len(devices)):
             for d in devices:
-                print(d)
-    #            print(d.name)
-    #            print(d.address)
+#                print(d)
+#                print(d.name)
+#                print(d.address)
                 if d.name == 'W55':
-                    print('Found W55!')
+                    print('Found W55 at {d.address}!')
                     address.append(d.address) #'A0:B7:65:59:6F:BA'
         
         
