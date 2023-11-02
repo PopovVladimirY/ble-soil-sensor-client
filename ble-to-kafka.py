@@ -14,7 +14,7 @@ sleep_uuid: str = '54021135-c289-4e63-af8e-653f32e7851a'
 
 broker='192.168.200.12:9092'
 client_id = 'msensor1_id'
-msensor1_topic = "msensor2_live_topic"
+msensor_topic = "msensor_live_topic"
 
 avro_schema = '''{
     "namespace": "msensor.avro",
@@ -37,21 +37,31 @@ schema = avro.schema.parse(avro_schema)
 admin = KafkaAdminClient(bootstrap_servers = broker, client_id = client_id)
 producer = KafkaProducer(bootstrap_servers = broker, client_id = client_id)
 
-topics = admin.list_topics()
+'''
 #print(topics)
-
 if not msensor1_topic in topics:
     topic_list = []
     topic_list.append(NewTopic(name = msensor1_topic, num_partitions = 1, replication_factor = 1))
     admin.create_topics(new_topics = topic_list, validate_only = False)
-
-'''
-Sending data to Kafka server in Avro format
 '''
 
-async def sendData(producer, topic, data, schema, device):
+async def sendData(admin, producer, topic, data, schema, device):
+    '''
+    Sending data to Kafka server in Avro format
+    '''
     if data != None and len(data):
         try:
+            # topic name per device
+            mtopic = device + '_' + topic
+
+            # create topic if not exists
+            topics = admin.list_topics()
+            if not mtopic in topics:
+                topic_list = []
+                topic_list.append(NewTopic(name = mtopic, num_partitions = 1, replication_factor = 1))
+                admin.create_topics(new_topics = topic_list, validate_only = False)
+                
+            # fill in Avro data
             bytes_writer = io.BytesIO()
             encoder = avro.io.BinaryEncoder(bytes_writer)
             nCnt = np.frombuffer(data, count=1, dtype=np.int32)[0]
@@ -69,14 +79,18 @@ async def sendData(producer, topic, data, schema, device):
                 "battery": float(fNotify[3]), 
                 "soil": float(fNotify[4])
                 }
+            # serialize Avro data
             writer = DatumWriter(schema)
             writer.write(datum=x, encoder=encoder)
             raw_bytes = bytes_writer.getvalue()
-            producer.send(topic = topic, value = raw_bytes)
+            # send Avro data to Kafka
+            producer.send(topic = mtopic, value = raw_bytes)
         except Exception as e: # work on python 3.x
             print('Failed: %s' % e)
 
+
 async def printData(data, device):
+    ''' Printing BLE data '''
     if data != None and len(data):
         try:
             nCnt: int = np.frombuffer(data, count=1, dtype=np.int32)[0]
@@ -95,17 +109,27 @@ async def printData(data, device):
 def t_callback(sender: BleakGATTCharacteristic, data: bytearray):
     printData(data)
 
-async def main(producer, topic, schema):
+async def main(admin, producer, topic, schema):
+    ''' 
+    Main loop. 
+        Receive data from BLE sensor, 
+        update sensor sleep interval,
+        format to Avro, 
+        send to Kafka, 
+        print to console
+    '''
     while True:
 #        address = ['A0:B7:65:59:6F:BA', 'A0:B7:65:67:FE:26']
-        address = ['A0:B7:65:59:6F:BA']
-        map = {'A0:B7:65:59:6F:BA': 'Red', 'A0:B7:65:67:FE:26': 'Blue'}
-        '''
+        address = []
+        # These are MAC addresses of BLE devices mapped to device names.
+        # Update to match actual MACs
+        map = {'A0:B7:65:59:6F:BA': 'red', 'A0:B7:65:67:FE:26': 'blue'}
+        
         devices = []
         try:
             # Scan is required to ensure stable reconnecion to device, as per Bleak manual
             print("Scan for BLE devices")
-            devices = await BleakScanner.discover()
+            devices = await BleakScanner.discover(timeout=3)
         except:
             print("BLE scanner failed")
             pass
@@ -118,7 +142,7 @@ async def main(producer, topic, schema):
                 if d.name == 'W55':
                     print('Found W55!')
                     address.append(d.address) #'A0:B7:65:59:6F:BA'
-        '''
+        
         
         if len(address):
             for a in address:
@@ -140,14 +164,18 @@ async def main(producer, topic, schema):
                             '''
                             await asyncio.sleep(1)
                             data = await client.read_gatt_char(t_uuid)
+                            try:
+                                sleepInterval = 30*60;
+                                read = await client.read_gatt_char(sleep_uuid)
+                                nInterval: int = np.frombuffer(read, count=1, dtype=np.int32)[0]
+                                await client.write_gatt_char(sleep_uuid, sleepInterval.to_bytes(4, "little"))
+                                await client.disconnect()
+                            except Exception as e: # work on python 3.x
+                                print('Failed: %s' % e)
 
-                            sleepInterval = 30*60;
-                            read = await client.read_gatt_char(sleep_uuid)
-                            nInterval: int = np.frombuffer(read, count=1, dtype=np.int32)[0]
-                            await client.write_gatt_char(sleep_uuid, sleepInterval.to_bytes(4, "little"))
     #                        await client.start_notify(t_uuid, t_callback)
     #                        print("Wait for notification")
-                            await sendData(producer=producer, topic=topic, data=data, schema=schema, device=map[a] if map[a] != None else 'Unknown')
+                            await sendData(admin=admin, producer=producer, topic=topic, data=data, schema=schema, device=map[a] if map[a] != None else 'Unknown')
                             await printData(data=data, device=map[a] if map[a] != None else 'Unknown')
                             print(f"Old Sleep Interval: {nInterval}")
                             print(f"New Sleep Interval: {sleepInterval}")
@@ -155,20 +183,13 @@ async def main(producer, topic, schema):
                 #                        print("Stop notification") 
                 #                        await client.stop_notify(t_uuid)
                             print("Disconnect")
-                            await client.disconnect()
-                            await asyncio.sleep(10) # not too often
+#                            await asyncio.sleep(10) # not too often
 
                         except Exception as e: # work on python 3.x
                             print('Failed: %s' % e)
 
-                except:
-                    pass # Waiting for sensor to wakeup and go online. Not a error.
+                except Exception as e: # work on python 3.x
+                    print('Failed: %s' % e)
 
-#                except Exception as e: # work on python 3.x
-#                    print('Failed: %s' % e)
-
-        await asyncio.sleep(1)
-
-#asyncio.run()
 loop = asyncio.get_event_loop()
-loop.run_until_complete(main(producer=producer, topic=msensor1_topic, schema=schema))
+loop.run_until_complete(main(admin=admin, producer=producer, topic=msensor_topic, schema=schema))
