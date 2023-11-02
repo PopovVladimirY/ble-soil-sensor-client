@@ -140,7 +140,7 @@ async def main(admin, producer, topic, schema):
 #                print(d.name)
 #                print(d.address)
                 if d.name == 'W55':
-                    print('Found W55 at {d.address}!')
+                    print(f'Found W55 at {d.address}!')
                     address.append(d.address) #'A0:B7:65:59:6F:BA'
         
         
